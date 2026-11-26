@@ -45,9 +45,31 @@ function todayMenu() {
   return [['why', 'what', 'w5h1'][n % 3], 'common', ['set', 'tatoe'][n % 2]];
 }
 
+function stepInfo(m) { return m.step ? STEPS[m.step - 1] : COURSE_STEP; }
+
 // ---------- 手順（1問ずつ答えていく形） ----------
+// 通しコースの答えの並び：0-4 なぜ / 5-9 どういうこと / 10-15 5W1H / 16 結論 / 17 経験
+function courseSteps(topic) {
+  const s = [];
+  for (let i = 0; i < 5; i++) {
+    s.push({ group: 'なぜ？', label: `なぜ？ ${i + 1}/5`, chain: true, ph: i === 0 ? '思いついたままでOK' : '一言でOK',
+      q: (ans) => (i === 0 ? `「${topic}」\nこれは、なぜ？` : `「${ans[i - 1]}」\nそれは、なぜ？`) });
+  }
+  for (let i = 0; i < 5; i++) {
+    s.push({ group: 'どういうこと？', label: `どういうこと？ ${i + 1}/5`, chain: true, ph: i === 0 ? '思いついたままでOK' : '一言でOK',
+      q: (ans) => (i === 0 ? `「${topic}」\nこれって、つまりどういうこと？` : `「${ans[5 + i - 1]}」\nそれって、どういうこと？`) });
+  }
+  COURSE_W.forEach(([k, q]) => s.push({ group: '5W1H', label: `5W1H：${k}`, ph: '短くてOK', q: () => `「${topic}」\n${k}：${q}` }));
+  s.push({ group: 'まとめる', label: 'まとめる：結論', ph: '一言でまとめる',
+    q: (ans) => `ここまでの答え\n・本音：${ans[4]}\n・本質：${ans[9]}\n・どうすれば：${ans[15]}\n\n「${topic}」について、結論を一言でいうと？` });
+  s.push({ group: '伝える', label: '伝える：経験', ph: '例：〇〇の時に〇〇して、〇〇だと思った', multi: true,
+    q: (ans) => `結論「${ans[16]}」\n\nそう思った、実際の出来事は？\n（その時どう感じたかも）` });
+  return s;
+}
+
 function stepsFor(modeId, topic) {
   const m = MODES[modeId];
+  if (modeId === 'course') return courseSteps(topic);
   if (modeId === 'why' || modeId === 'what') {
     const ask = modeId === 'why' ? 'それは、なぜ？' : 'それって、どういうこと？';
     return Array.from({ length: 5 }, (_, i) => ({
@@ -79,6 +101,19 @@ function stepsFor(modeId, topic) {
 function summary(r) {
   const m = MODES[r.mode];
   const a = r.answers;
+  if (r.mode === 'course') {
+    return {
+      lines: [
+        ...a.slice(0, 5).map((x, i) => `なぜ？${i + 1}：${x}`),
+        ...a.slice(5, 10).map((x, i) => `どういうこと？${i + 1}：${x}`),
+        ...COURSE_W.map(([k], i) => `${k}：${a[10 + i] || ''}`),
+        `結論：${a[16]}`,
+        `経験：${a[17]}`,
+      ],
+      key: '人に話すなら（結論 → 経験 → これから）',
+      keyText: `${a[16]}\n\n実際、${a[17]}\n\nなので、これからは「${a[15]}」`,
+    };
+  }
   if (r.mode === 'why' || r.mode === 'what') {
     return {
       lines: a.map((x, i) => `${'①②③④⑤'[i]} ${x}`),
@@ -152,7 +187,7 @@ function render() {
 
 function modeCard(id, done) {
   const m = MODES[id];
-  const st = STEPS[m.step - 1];
+  const st = stepInfo(m);
   return `<a class="mode ${st.color}" href="#/train/${id}">
     <span class="mi">${m.icon}</span>
     <span class="mt"><b>${esc(m.name)}</b><small>${esc(m.gain)}</small></span>
@@ -174,8 +209,15 @@ function viewHome() {
       <div><b>${recs.length}</b><small>これまで</small></div>
     </section>
 
-    <h2>今日のメニュー <small>${menuDone}/3</small></h2>
-    <p class="note">3つの悩みから1つずつ。全部で10分くらいです。</p>
+    <a class="course" href="#/train/course">
+      <span class="ct">🎯 通しコース ${doneModes.has('course') ? '<em class="done">✓ 今日やった</em>' : ''}</span>
+      <b>1つのお題を、最後まで言葉にする</b>
+      <span class="flow">なぜ？×5 → どういうこと？×5 → 5W1H → まとめる → 伝える</span>
+      <small>約10分。自分のモヤモヤや、言われたことをお題にできます</small>
+    </a>
+
+    <h2>すき間時間の単発 <small>${menuDone}/3</small></h2>
+    <p class="note">3つの悩みから1つずつ。1つ1〜5分です。</p>
     <div class="modes">${menu.map((id) => modeCard(id, doneModes.has(id))).join('')}</div>
     ${menuDone === 3 ? '<p class="clear">今日のメニュー完了です。おつかれさまでした。</p>' : ''}
 
@@ -192,7 +234,10 @@ function viewHome() {
 function viewMenu() {
   setHeader('トレーニング'); setTab('menu');
   const done = new Set(loadRecords().filter((r) => r.day === dayKey()).map((r) => r.mode));
-  $view.innerHTML = STEPS.map((s) => `
+  $view.innerHTML = `
+    <h2 class="sh g0"><span>おすすめ</span>1つのお題を最後まで</h2>
+    <p class="note">具体化 → 抽象化 → 伝える を通しで</p>
+    <div class="modes">${modeCard('course', done.has('course'))}</div>` + STEPS.map((s) => `
     <h2 class="sh ${s.color}"><span>${s.name}</span>${esc(s.worry)}</h2>
     <p class="note">${esc(s.fix)}</p>
     <div class="modes">${Object.keys(MODES).filter((id) => MODES[id].step === s.id).map((id) => modeCard(id, done.has(id))).join('')}</div>
@@ -201,7 +246,7 @@ function viewMenu() {
 
 function viewTrain(modeId) {
   const m = MODES[modeId];
-  const st = STEPS[m.step - 1];
+  const st = stepInfo(m);
   setHeader(m.name, '#/menu'); setTab('menu');
   let topic = pick(m.topics);
 
@@ -221,7 +266,7 @@ function viewTrain(modeId) {
           <button class="ghost" id="own">✏️ 自分で決める</button>
         </div>
         <div id="ownBox" hidden>
-          <input id="ownIn" type="text" placeholder="${modeId === 'common' ? '例：パテと化粧' : '例：今日現場で言われたこと'}" enterkeyhint="done">
+          <input id="ownIn" type="text" placeholder="${modeId === 'common' ? '例：パテと化粧' : modeId === 'course' ? '例：親方に「確認が甘い」と言われた' : '例：今日現場で言われたこと'}" enterkeyhint="done">
           <button class="ghost" id="ownOk">このお題にする</button>
         </div>
       </div>
@@ -298,10 +343,21 @@ function viewTrain(modeId) {
     let i = 0;
     const draw = () => {
       const s = steps[i];
-      const prev = answers.slice(0, i);
+      let dots, prev;
+      if (s.group) {
+        // 通しコース：段階ごとにまとめて表示し、同じ段階の答えだけ上に並べる
+        const groups = [...new Set(steps.map((x) => x.group))];
+        const gi = groups.indexOf(s.group);
+        dots = groups.map((g, j) => `<span class="${j < gi ? 'ok' : j === gi ? 'now' : ''}">${esc(g)}</span>`).join('');
+        const first = steps.findIndex((x) => x.group === s.group);
+        prev = s.chain ? answers.slice(first, i) : [];
+      } else {
+        dots = steps.map((x, j) => `<span class="${j < i ? 'ok' : j === i ? 'now' : ''}">${esc(x.label)}</span>`).join('');
+        prev = modeId === 'why' || modeId === 'what' ? answers.slice(0, i) : [];
+      }
       $stage.innerHTML = `
-        <div class="dots">${steps.map((x, j) => `<span class="${j < i ? 'ok' : j === i ? 'now' : ''}">${esc(x.label)}</span>`).join('')}</div>
-        ${prev.length && (modeId === 'why' || modeId === 'what') ? `<div class="chain">${prev.map((x, j) => `<div><i>${'①②③④⑤'[j]}</i>${esc(x)}</div>`).join('')}</div>` : ''}
+        <div class="dots">${dots}</div>
+        ${prev.length ? `<div class="chain">${prev.map((x, j) => `<div><i>${'①②③④⑤'[j]}</i>${esc(x)}</div>`).join('')}</div>` : ''}
         <div class="card q"><small>${esc(s.label)}</small><p>${esc(s.q(answers)).replace(/\n/g, '<br>')}</p></div>
         ${s.multi
           ? `<textarea id="ans" rows="3" placeholder="${esc(s.ph)}"></textarea>`
@@ -381,7 +437,7 @@ function viewLog() {
       <h3>${day.slice(5).replace('-', '/')}（${'日月火水木金土'[new Date(day).getDay()]}）</h3>
       ${byDay[day].map((r) => {
         const m = MODES[r.mode]; const s = summary(r);
-        return `<a class="rec ${STEPS[m.step - 1].color}" href="#/log/${r.id}">
+        return `<a class="rec ${stepInfo(m).color}" href="#/log/${r.id}">
           <span class="mi">${m.icon}</span>
           <span class="mt"><b>${esc(r.topic)}</b><small>${esc(m.name)}${s.keyText && r.mode !== 'common' ? ' → ' + esc(String(s.keyText).split('\n')[0]) : ''}</small></span>
         </a>`;
@@ -397,7 +453,7 @@ function viewRecord(id) {
   const m = MODES[r.mode]; const s = summary(r);
   const d = new Date(r.at);
   $view.innerHTML = `
-    <div class="badge ${STEPS[m.step - 1].color}">${m.icon} ${esc(m.name)}</div>
+    <div class="badge ${stepInfo(m).color}">${m.icon} ${esc(m.name)}</div>
     <p class="sub">${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}　かかった時間 ${fmtSec(r.elapsed)}（目安 ${fmtSec(r.limit)}）</p>
     <div class="card q"><small>お題</small><p>${esc(r.topic)}</p></div>
     <ul class="lines">${s.lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>

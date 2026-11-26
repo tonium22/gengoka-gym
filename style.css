@@ -66,7 +66,17 @@ details[open] summary { margin-bottom: 6px; }
 .rec .mt small { white-space: nowrap; }
 .ms { color: var(--sub); font-size: 13px; flex: none; }
 .done { color: var(--main); font-style: normal; font-weight: 700; font-size: 12px; }
+.g0 { --c: var(--main); --cs: var(--main-soft); }
 .g1 { --c: var(--g1); --cs: var(--g1s); }
+.course {
+  display: block; margin: 16px 0 4px; padding: 16px; border-radius: 16px; text-decoration: none;
+  background: var(--main); color: var(--on);
+}
+.course .ct { font-size: 13px; font-weight: 700; opacity: .9; }
+.course .ct .done { color: var(--on); margin-left: 6px; }
+.course b { display: block; font-size: 19px; margin: 4px 0 6px; }
+.course .flow { display: block; font-size: 13px; background: rgba(255,255,255,.18); border-radius: 8px; padding: 6px 8px; }
+.course small { display: block; font-size: 12px; margin-top: 8px; opacity: .9; }
 .g2 { --c: var(--g2); --cs: var(--g2s); }
 .g3 { --c: var(--g3); --cs: var(--g3s); }
 .clear { text-align: center; color: var(--main); font-weight: 700; }
